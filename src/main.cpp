@@ -258,7 +258,7 @@ unsigned long tillDefrost = millis() - lastDefrostTime; //Вычисление �
 // *****************************************
 void cycleMorMin() { 
   unsigned long morTimeStamp=millis(); //Время включения вентилятора
-  digitalWrite (LedT, HIGH);            //Включение индикатора вентилятора
+              //Включение индикатора вентилятора
   while (millis() - morTimeStamp < fenWorkTime) //Проверка на допустимое время работы *****(ссылка на цикл)*****
     {if ((ispthermProv() <= minTempIsp && isEmagnUp == true) // Переделать ******** - ????????????????
     || (ispthermProv() >= maxTempIsp && isEmagnUp == false)) //Проверка на температуру getTemp() < targetDefrostTempтемпературу испарителя !!!!!!!!!!!!!!
@@ -271,21 +271,30 @@ void cycleMorMin() {
   //---- и ждем температуру испарителя -24 градуса ProvTisp()
   //---- при достижении испю -24 градуса - клапан, вкл фен,проверка темпер испю малая
   // Включить millis как на фене
-   while ( tmor > maxTempMor) {
+   while ( tmor > maxTempMor && millis() - morTimeStamp < fenWorkTime ) {
 if (tisp > 0 && isEmagnUp == true){
   klapan(); 
   ProvTisp();
+
   // если исп. меньше 0 !!!!!!!!!!! Продолжить!
   while (tisp > -23) { 
     ispthermProv();
     
   }
+} else if (tisp >0 && isEmagnUp == false) {
+  while (tisp > -23) {
+  ispthermProv();
+  }
 }
+klapan ();
+digitalWrite (LedT, HIGH);
+digitalWrite (fanPin, HIGH);
 morthermProv();
    }
-  if ((isEmagnUp == false && tisp > 0) || (isEmagnUp == true && tisp < 0)){
-    fanCycle ();              //доделать********************************************!!!
-  } //else if (isEmagnUp == true && tisp > 0){fanCycle (); }
+   digitalWrite (LedT, HIGH);
+   digitalWrite (fanPin, LOW);
+ // if ((isEmagnUp == false && tisp > 0) || (isEmagnUp == true && tisp < 0)){
+  //  fanCycle ();              //доделать********************************************!!!} //else if (isEmagnUp == true && tisp > 0){fanCycle (); }
 }
 //*********** -Подпрограмма цикла компрессии- *****************/
  void compressorCycle() {
