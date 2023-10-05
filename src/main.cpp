@@ -22,12 +22,12 @@ GyverNTC therm3(2, 10000, 3950);  //  испарилка (испарение)
 
 // **************************
 
-const float minTempMor = -18;                 // Минимальна+я температура морозилки
+const float minTempMor = -18;                 // Минимальна+я температура морозилки 
 const float nomTempMor = -15;                 // Рабочая температура морозилки
-const float maxTempMor = -10;                 // Высокая температура
+const float maxTempMor = -12;                 // Высокая температура
 const float minTempHol = 5;                   // Минимальная температура холодильника
-const float nomTempHol = 7;                   // Номинальная температура холодильника
-const float maxTempHol = 9;                   // Максимальная температура холодильника
+const float nomTempHol = 8;                   // Номинальная температура холодильника
+const float maxTempHol = 12;                   // Максимальная температура холодильника
 const float minTempIsp = -24;                   // Минимальная температура испарителя
 const float nomTempIsp = 0;                   // Номинальная температура испарителя
 const float maxTempIsp = 9;                   // Максимальная температура испарителя
@@ -77,6 +77,15 @@ float tempCompr;
 static uint8_t tog = 0;
 static uint32_t oldtime = millis();
 
+//************** -Проверка температуры по всем датчикам***************************
+float getTempAdd (){
+  therm1.getTempAverage();
+  therm2.getTempAverage();
+  therm3.getTempAverage(); 
+  tmor = therm1.getTempAverage();
+  thol = therm2.getTempAverage();
+  tisp = therm3.getTempAverage();
+}
 // ************ -Функции температуры- **************
 float termCheck () { //float , tempCompr
   if (tmor <= minTempMor && thol <= minTempHol && tisp <= minTempIsp) {
@@ -93,16 +102,6 @@ float getTempMor(){
   Serial.println(tempTemp);
   return tempTemp;
 }
-//************** -Проверка температуры по всем датчикам***************************
-float getTempAdd (){
-  therm1.getTempAverage();
-  therm2.getTempAverage();
-  therm3.getTempAverage(); 
-  tmor = therm1.getTempAverage();
-  thol = therm2.getTempAverage();
-  tisp = therm3.getTempAverage();
-}
-
 
 // ************* -Проверка температуры по отдельным датчикам- *************
 
@@ -129,11 +128,17 @@ float ispthermProv() {
 // **************************
 // Цикл проверки испарителя 5 переходов
 void ispProvTemp () {
+  ispthermProv ();  // добавлено 21.09.23
+  float tisp2 = tisp; //добавлено 21.09.23
+  delay(1000); //добавлено 21.09.23
    for (int i = 0; i <= 5; i++ ) { 
     ispthermProv ();
     Serial.println (tisp);
-    delay(30000);
+    delay(30000);  
   } 
+  if (tisp > tisp2) { isEmagnUp = true;}//добавлено 21.09.23
+  else if (tisp < tisp2) {isEmagnUp = false;} //добавлено 21.09.23
+  
 }
 // **************************
 // Проверка испарителя
@@ -217,36 +222,6 @@ void fanCycle() {
   digitalWrite (LedT, LOW);             //Выключение индикатора вентилятора ???????????????
   delay(300000);
 }
-void setup() {
-  //Инициализация реле компрессора
-  pinMode(compr, OUTPUT);
-  digitalWrite(compr, LOW);
-  //Инициализация выхода вентилятора
-  pinMode(fanPin, OUTPUT);
-  digitalWrite(fanPin, LOW);
-  //Инициализация реле испарителя
-  pinMode(releKN, OUTPUT);
-  digitalWrite(releKN, LOW);
-  //Инициализация индикатора цикла вентилятора
-  pinMode(LedT, OUTPUT);
-  digitalWrite (LedT, HIGH);
-  //Инициализация термодатчика
-//  TempSensors.begin();
-  //Сериал-порт для дебага
-  Serial.begin(9600);
-  //Задержка семь минут, защита от скачков напряжения
-  delay(420000);
-  lastDefrostTime = millis();
-  digitalWrite (LedT, LOW);
-}
-// **************************
-
-// **************************
-void loop() {
-  getTempAdd(); // Это нужно пересмотреть ---------!!!!!!!!!!!!!!!!!!!!!!!!!
-   compressorCycle();                    //Цикл компрессии
-
-}  
 // *****************************************
 void cycleMorMin() { 
   unsigned long morTimeStamp=millis(); //Время включения вентилятора
@@ -294,6 +269,39 @@ delay (heatReadTime);
   digitalWrite(compr, LOW);     //Выключение компрессора
   delay (compRestTime);         //Принудительная пауза перед перезапуском компрессора
   }
+void setup() { 
+  //Инициализация реле компрессора
+  pinMode(compr, OUTPUT);
+  digitalWrite(compr, LOW);
+  //Инициализация выхода вентилятора
+  pinMode(fanPin, OUTPUT);
+  digitalWrite(fanPin, LOW);
+  //Инициализация реле испарителя
+  pinMode(releKN, OUTPUT);
+  digitalWrite(releKN, LOW);
+  //Инициализация индикатора цикла вентилятора
+  pinMode(LedT, OUTPUT);
+  digitalWrite (LedT, HIGH);
+  //Инициализация термодатчика
+//  TempSensors.begin();
+  //Сериал-порт для дебага
+  Serial.begin(9600);
+  //Задержка семь минут, защита от скачков напряжения
+  delay(420000);
+  lastDefrostTime = millis();
+  digitalWrite (LedT, LOW);
+}
+// **************************
+
+// **************************
+void loop() {
+  getTempAdd(); // Это нужно пересмотреть ---------!!!!!!!!!!!!!!!!!!!!!!!!!
+  if (tmor > nomTempMor || thol > nomTempHol ) {
+   compressorCycle();                    //Цикл компрессии
+  }
+  delay (60000);
+}  
+
 
 
 
