@@ -22,12 +22,12 @@ GyverNTC therm3(2, 10000, 3950);  //  испарилка (испарение)
 
 // **************************
 
-const float minTempMor = -18;                 // Минимальна+я температура морозилки
+const float minTempMor = -18;                 // Минимальна+я температура морозилки 
 const float nomTempMor = -15;                 // Рабочая температура морозилки
-const float maxTempMor = -10;                 // Высокая температура
+const float maxTempMor = -12;                 // Высокая температура
 const float minTempHol = 5;                   // Минимальная температура холодильника
-const float nomTempHol = 7;                   // Номинальная температура холодильника
-const float maxTempHol = 9;                   // Максимальная температура холодильника
+const float nomTempHol = 8;                   // Номинальная температура холодильника
+const float maxTempHol = 12;                   // Максимальная температура холодильника
 const float minTempIsp = -24;                   // Минимальная температура испарителя
 const float nomTempIsp = 0;                   // Номинальная температура испарителя
 const float maxTempIsp = 9;                   // Максимальная температура испарителя
@@ -77,6 +77,15 @@ float tempCompr;
 static uint8_t tog = 0;
 static uint32_t oldtime = millis();
 
+//************** -Проверка температуры по всем датчикам***************************
+float getTempAdd (){
+  therm1.getTempAverage();
+  therm2.getTempAverage();
+  therm3.getTempAverage(); 
+  tmor = therm1.getTempAverage();
+  thol = therm2.getTempAverage();
+  tisp = therm3.getTempAverage();
+}
 // ************ -Функции температуры- **************
 float termCheck () { //float , tempCompr
   if (tmor <= minTempMor && thol <= minTempHol && tisp <= minTempIsp) {
@@ -93,16 +102,6 @@ float getTempMor(){
   Serial.println(tempTemp);
   return tempTemp;
 }
-//************** -Проверка температуры по всем датчикам***************************
-float getTempAdd (){
-  therm1.getTempAverage();
-  therm2.getTempAverage();
-  therm3.getTempAverage(); 
-  tmor = therm1.getTempAverage();
-  thol = therm2.getTempAverage();
-  tisp = therm3.getTempAverage();
-}
-
 
 // ************* -Проверка температуры по отдельным датчикам- *************
 
@@ -114,7 +113,8 @@ float holthermProv() {
   therm2.getTempAverage();
   thol = therm2.getTempAverage();
 }
-float ispthermProv() {
+// проверка испарилки
+float ispthermProv() { 
   therm3.getTempAverage();
   tisp = therm3.getTempAverage();
 }
@@ -126,14 +126,22 @@ float ispthermProv() {
 }*/
 
 // **************************
+// Цикл проверки испарителя 5 переходов
 void ispProvTemp () {
-   for (int i = 0; i <= 5; i++ ) { // ?? Вынести в отдельную функцию, 6 сделать переменной ??? int meta = 6; i <= meta
+  ispthermProv ();  // добавлено 21.09.23
+  float tisp2 = tisp; //добавлено 21.09.23
+  delay(1000); //добавлено 21.09.23
+   for (int i = 0; i <= 5; i++ ) { 
     ispthermProv ();
     Serial.println (tisp);
-    delay(30000);
+    delay(30000);  
   } 
+  if (tisp > tisp2) { isEmagnUp = true;}//добавлено 21.09.23
+  else if (tisp < tisp2) {isEmagnUp = false;} //добавлено 21.09.23
+  
 }
 // **************************
+// Проверка испарителя
 void ProvTisp() {
     //int meta = 6;
   ispthermProv(); //oct
@@ -190,6 +198,7 @@ ispProvTemp ();
   //float toStrl (tmor, thol, tisp){
 }
 //------------------------------------------------------//
+// Включение клапана
 void klapan() {
   digitalWrite(releKN, HIGH);
   delay(1);
@@ -213,7 +222,54 @@ void fanCycle() {
   digitalWrite (LedT, LOW);             //Выключение индикатора вентилятора ???????????????
   delay(300000);
 }
-void setup() {
+// *****************************************
+void cycleMorMin() { 
+  unsigned long morTimeStamp=millis(); //Время включения вентилятора
+  //----- если тisp больше 0 и емагн увеличивается, тогда - клапан ispthermProv() 
+  // ----иначе вкл. цикл фена и ждём температуру 0 градусов после чего отключаем фен morthermProv()
+  //---- и ждем температуру испарителя -24 градуса ProvTisp()
+// Если температура морозилки больше максимальной и время меньше установленного
+   while ( tmor > maxTempMor && millis() - morTimeStamp < fenWorkTime ) {
+if (tisp > 0 && isEmagnUp == true){
+  klapan(); 
+  ProvTisp(); //ispProvTemp ---!!!!!!!!!!!!!!!!!!!!!
+
+  while (tisp > -23) { 
+    ispthermProv();  
+  }
+} else if (tisp >0 && isEmagnUp == false) {
+  while (tisp > -23) {
+  ispthermProv();
+  }
+}
+klapan ();
+digitalWrite (LedT, HIGH);
+digitalWrite (fanPin, HIGH);
+morthermProv();
+delay (heatReadTime);
+   }
+   digitalWrite (LedT, HIGH);
+   digitalWrite (fanPin, LOW);
+}
+//*********** -Подпрограмма цикла компрессии- *****************/
+ void compressorCycle() {
+  unsigned long compTimeStamp=millis(); //Время включения компрессора
+  while (getTempMor() > targetTemp && millis() - compTimeStamp < compWorkTime) //Проверка на температуру и допустимое время работы
+  // Нужно напрямую ссылаться на функцию
+    {digitalWrite(compr, HIGH); //Включение компрессора
+  if (!isCheckingPass) {
+    ProvTisp(); } // начать проверку температуры испарителя
+  if (tmor < maxTempMor){
+    cycleMorMin();
+  }
+
+
+    delay (compReadTime);       //Интервал проверки температуры и времени
+    }
+  digitalWrite(compr, LOW);     //Выключение компрессора
+  delay (compRestTime);         //Принудительная пауза перед перезапуском компрессора
+  }
+void setup() { 
   //Инициализация реле компрессора
   pinMode(compr, OUTPUT);
   digitalWrite(compr, LOW);
@@ -239,72 +295,13 @@ void setup() {
 
 // **************************
 void loop() {
-  getTempAdd();
-/*
-if (millis() < lastDefrostTime) {lastDefrostTime = millis();} //Проверка на перелив времени
-
-unsigned long tillDefrost = millis() - lastDefrostTime; //Вычисление времени до цикла вентилятора
-
- if (tillDefrost > defrostTime) {        //Проверка на достижение интервала
- digitalWrite(fanPin, LOW);               //Выключение вентилятора
-  heaterCycle();                         //Цикл разморозки
-  lastDefrostTime = millis();            //Сброс таймера разморозки
-  }
-  else
-  {digitalWrite(fanPin, HIGH);            //Выключение вентилятора
+  getTempAdd(); // Это нужно пересмотреть ---------!!!!!!!!!!!!!!!!!!!!!!!!!
+  if (tmor > nomTempMor || thol > nomTempHol ) {
    compressorCycle();                    //Цикл компрессии
-  }; */
+  }
+  delay (60000);
 }  
-// *****************************************
-void cycleMorMin() { 
-  unsigned long morTimeStamp=millis(); //Время включения вентилятора
-  digitalWrite (LedT, HIGH);            //Включение индикатора вентилятора
-  while (millis() - morTimeStamp < fenWorkTime) //Проверка на допустимое время работы *****(ссылка на цикл)*****
-    {if ((ispthermProv() <= minTempIsp && isEmagnUp == true) // Переделать ******** - ????????????????
-    || (ispthermProv() >= maxTempIsp && isEmagnUp == false)) //Проверка на температуру getTemp() < targetDefrostTempтемпературу испарителя !!!!!!!!!!!!!!
-      {digitalWrite (fanPin, HIGH);}     //Включение вентилятора
-    else {digitalWrite (fanPin, LOW);};  //Выключение вентилятора
-  delay (heatReadTime);                 //Интервал проверки температуры и времени
-  }
-  //----- если тisp больше 0 и емагн увеличивается, тогда - клапан ispthermProv() 
-  // ----иначе вкл. цикл фена и ждём температуру 0 градусов после чего отключаем фен morthermProv()
-  //---- и ждем температуру испарителя -24 градуса ProvTisp()
-  //---- при достижении испю -24 градуса - клапан, вкл фен,проверка темпер испю малая
-  // Включить millis как на фене
-   while ( tmor > maxTempMor) {
-if (tisp > 0 && isEmagnUp == true){
-  klapan(); 
-  ProvTisp();
-  // если исп. меньше 0 !!!!!!!!!!! Продолжить!
-  while (tisp > -23) { 
-    ispthermProv();
-    
-  }
-}
-morthermProv();
-   }
-  if ((isEmagnUp == false && tisp > 0) || (isEmagnUp == true && tisp < 0)){
-    fanCycle ();              //доделать********************************************!!!
-  } //else if (isEmagnUp == true && tisp > 0){fanCycle (); }
-}
-//*********** -Подпрограмма цикла компрессии- *****************/
- void compressorCycle() {
-  unsigned long compTimeStamp=millis(); //Время включения компрессора
-  while (getTempMor() > targetTemp && millis() - compTimeStamp < compWorkTime) //Проверка на температуру и допустимое время работы
-  // Нужно напрямую ссылаться на функцию
-    {digitalWrite(compr, HIGH); //Включение компрессора
-  if (!isCheckingPass) {
-    ProvTisp(); } // начать проверку температуры испарителя
-  if (tmor < maxTempMor){
-    cycleMorMin();
-  }
 
-
-    delay (compReadTime);       //Интервал проверки температуры и времени
-    }
-  digitalWrite(compr, LOW);     //Выключение компрессора
-  delay (compRestTime);         //Принудительная пауза перед перезапуском компрессора
-  }
 
 
 
